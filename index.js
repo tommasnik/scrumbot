@@ -2,31 +2,34 @@ var Botkit = require('botkit');
 var os = require('os');
 var _ = require('lodash');
 var dateFormat = require('dateformat');
+var config = require('./config');
 
-var users, ims, channels;
+var users, ims, channels, statusChannel;
 var statuses = {};
-
-var BOT_USERS = ['scrumbot', 'slackbot'];
 
 var controller = Botkit.slackbot({
   debug: true
 });
 
 var bot = controller.spawn({
-  token: 'xoxb-17810069398-ZmCA8R9vftSi3rAMp5A2ppq0'
+  token: config.token
 });
 
 bot.startRTM(function(err,bot,payload) {
   if (err) {
     throw new Error('Could not connect to Slack');
   }
-  _.remove(payload.users, function(user) {
-    return _.contains(BOT_USERS, user.name);
-  });
-  users = payload.users;
   ims = payload.ims;
   channels = payload.channels;
-  console.log(formatJson(channels));
+
+  statusChannel = _.find(channels, {name: config.statusChannelName});
+  console.log('members: ', statusChannel.members);
+
+  users = _.filter(payload.users, function (user) {
+    return _.contains(statusChannel.members, user.id);
+  });
+  console.log('users for status channel:' + _.map(users, 'name'));
+
 });
 
 controller.hears(['status', 'init', '^s$'],'direct_message,direct_mention,mention',function(bot, message) {
@@ -37,12 +40,15 @@ controller.hears(['status', 'init', '^s$'],'direct_message,direct_mention,mentio
   var actualStatuses = statuses[dateFormat(new Date(), "yy-mm-dd h:MM")] = {};
 
   _.forEach(users, function (user) {
+    if (user.is_bot || user.name === 'slackbot') {
+      return;
+    }
+    console.log('starting conversation with user: ' + user.name);
+    actualStatuses[user.name] = {};
 
     function askYesterday(response, convo) {
       convo.ask("Ahoj :simple_smile: Na čem jsi pracoval včera?", function(response, convo) {
-        actualStatuses[user.name] = {
-          yesterday: response.text
-        };
+        actualStatuses[user.name].yesterday = response.text;
         askToday(response, convo);
         convo.next();
       });
@@ -60,22 +66,34 @@ controller.hears(['status', 'init', '^s$'],'direct_message,direct_mention,mentio
     function askBlocking(response, convo) {
       convo.ask("Je něco, s čím potřebuješ pomoct?", function(response, convo) {
         actualStatuses[user.name].blocking = response.text;
+        actualStatuses[user.name].finished = true;
         convo.say("Ok, díky :simple_smile: Až budu mít odpovědi i od ostatních, pošlu to do channelu #status. Tvoje odpověď je: ```" + formatJson(actualStatuses[user.name]) + '```');
         convo.next();
 
-        bot.say({
-          text: 'Hotovo. Status je: ```' + formatJson(actualStatuses) + '```',
-          channel: _.find(channels, {name: 'status'}).id
+        var isFinished = true;
+        _.forOwn(actualStatuses, function (userStatus) {
+          if (!userStatus.finished) {
+            isFinished = false;
+          }
         });
+
+        if (isFinished) {
+          bot.say({
+            text: '!channel: Status je:\n' + formatStatus(actualStatuses),
+            channel: _.find(channels, {name: config.statusChannelName}).id
+          });
+        }
       });
     }
 
-    bot.startConversation({
-      channel: _.find(ims, {user: user.id}).id,
-      event: 'direct_message',
-      type: 'message',
-      user: user.id
-    }, askYesterday);
+    bot.api.im.open({user: user.id}, function (err, response) {
+      bot.startConversation({
+        channel: response.channel.id,
+        event: 'direct_message',
+        type: 'message',
+        user: user.id
+      }, askYesterday);
+    });
   });
 });
 
@@ -116,4 +134,18 @@ function formatUptime(uptime) {
 
 function formatJson(json) {
   return JSON.stringify(json, null, 2);
+}
+
+function formatStatus(actualStatuses) {
+  var result = '';
+
+  _.forOwn(actualStatuses, function (value, key) {
+    result += '@' + key + ' pracoval/a:\n';
+    result += '> *včera*: ' + value.yesterday + '\n';
+    result += '> *dnes*: ' + value.today + '\n';
+    result += '> *Blokuje ho/ji*: ' + value.blocking + '\n';
+    result += '\n';
+  });
+
+  return result;
 }

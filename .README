@@ -1,0 +1,21 @@
+Scrumbot
+
+First make a bot integration inside of your Slack channel. Go here:
+https://my.slack.com/services/new/bot
+Enter a name for your bot. Make it something fun and friendly, but avoid a single task specific name. Bots can do lots! Let's not pigeonhole them.
+When you click "Add Bot Integration", you are taken to a page where you can add additional details about your bot, like an avatar, as well as customize its name & description.
+Copy the API token that Slack gives you.
+
+Then checkout this repo and add config file config.js with these options:
+module.exports = {
+  token: '<YOUR_BOT_SLACK_TOKEN>',
+  statusChannelName: '<NAME_OF_CHANNEL_TO_POST_STATUS_RESULT>'
+};
+
+Then build it:
+npm install
+
+And run it:
+node index.js
+
+PM your bot user with command "status" and it will start getting responses from all teammates that are subscribed to the status channel.
