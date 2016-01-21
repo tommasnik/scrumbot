@@ -20,8 +20,15 @@ ActualStatus.prototype.finish = function() {
   this.finished = true;
 };
 
-ActualStatus.prototype.isFinished = function() {
-  return this.finished || this.finishedUsers().length === this.users.length;
+ActualStatus.prototype.sendStatusMessage = function(bot, channels, config) {
+  bot.say({
+    text: this.printMessage(),
+    channel: _.find(channels, {name: config.statusChannelName}).id
+  });
+};
+
+ActualStatus.prototype.allUsersFinished = function() {
+  return this.finishedUsers().length === this.users.length;
 };
 
 ActualStatus.prototype.finishedUsers = function() {
@@ -48,10 +55,6 @@ ActualStatus.prototype.addBlocking = function(username, msg) {
 
 ActualStatus.prototype.finishUser = function(username) {
   this.data[username].finished = true;
-
-  if (this.isFinished()) {
-    this.finish();
-  }
 };
 
 ActualStatus.prototype.printMessage = function() {
@@ -60,7 +63,8 @@ ActualStatus.prototype.printMessage = function() {
 
 ActualStatus.prototype.printStatusMessage = function() {
   var finishedUsers = this.finishedUsers();
-  return 'Aktuálně odpovědělo ' + finishedUsers.length + ' lidí z ' + this.users.length +':\n' + finishedUsers.join(', ');
+  return 'Status spuštěn ' + dateFormat(this.date, 'mm.dd. H:MM') + '. ' +
+      'Aktuálně odpovědělo ' + finishedUsers.length + ' lidí z ' + this.users.length +':\n' + finishedUsers.join(', ');
 };
 
 ActualStatus.prototype.print = function() {
@@ -68,9 +72,18 @@ ActualStatus.prototype.print = function() {
 
   _.forOwn(this.data, function(value, key) {
     result += '@' + key + ':\n';
-    result += '> *včera*: ' + value.yesterday + '\n';
-    result += '> *dnes*: ' + value.today + '\n';
-    result += '> *potřebuje pomoct s*: ' + value.blocking + '\n';
+    if (value.yesterday) {
+      result += '> *včera*: ' + value.yesterday + '\n';
+    }
+    if (value.today) {
+      result += '> *dnes*: ' + value.today + '\n';
+    }
+    if (value.blocking) {
+      result += '> *potřebuje pomoct s*: ' + value.blocking + '\n';
+    }
+    if (!value.yesterday && !value.today && !value.blocking) {
+      result += 'Neodpověděl/a.';
+    }
     result += '\n';
   });
 

@@ -35,6 +35,7 @@ controller.hears(['status', 'init', '^s$'],'direct_message,direct_mention,mentio
 
   if (actualStatus) {
     bot.reply(message, BOT_ICON + ' Jeden status už běží. Jak je daleko zjišťování zjistíš, když mi napíšeš message se zprávou "progress".');
+    return;
   }
 
   bot.reply(message, BOT_ICON + ' Začínám zjišťovat status.');
@@ -68,20 +69,13 @@ controller.hears(['status', 'init', '^s$'],'direct_message,direct_mention,mentio
         actualStatus.addBlocking(user.name, response.text);
         actualStatus.finishUser(user.name);
 
-        if (actualStatus.isFinished()) {
-          convo.say(BOT_ICON + " Ok, díky :simple_smile: Až budu mít odpovědi i od ostatních, pošlu to do channelu #" + config.statusChannelName + "." +
-              'Jak je daleko zjišťování zjistíš, když mi napíšeš message se zprávou "progress".');
+        convo.say(BOT_ICON +" Ok, díky :simple_smile: Až budu mít odpovědi i od ostatních, pošlu to do channelu #" + config.statusChannelName + ".");
+        convo.next();
 
-          convo.next();
-          bot.say({
-            text: actualStatus.printMessage(),
-            channel: _.find(channels, {name: config.statusChannelName}).id
-          });
-
-        }
-        else {
-            convo.say(BOT_ICON +" Ok, díky :simple_smile: Až budu mít odpovědi i od ostatních, pošlu to do channelu #" + config.statusChannelName + ".");
-          convo.next();
+        if (actualStatus.allUsersFinished()) {
+          actualStatus.finish();
+          convo.say(BOT_ICON + " Ok, díky :simple_smile: Až budu mít odpovědi i od ostatních, pošlu to do channelu #" + config.statusChannelName + ".");
+          actualStatus.sendStatusMessage(bot, channels, config);
         }
       });
     }
@@ -114,12 +108,26 @@ controller.hears(['uptime','identify yourself','who are you','what is your name'
 });
 
 controller.hears(['help'],'direct_message,direct_mention,mention',function(bot, message) {
-  bot.reply(message, BOT_ICON + ' Zatím nemám nápovědu. Smůla. :fu:');
+  bot.reply(message, BOT_ICON + ' Příkazy:\n' +
+      '*help* - vypíše tuto nápovědu\n' +
+      '*status*, *s* - vypíše tuto nápovědu\n' +
+      '*progress* - vypíše stav aktuálně probíhajícího statusu\n' +
+      '*finish* - ukončí aktuální status\n' +
+      '*uptime* - vypíše info o botovi (nic moc zajímavého)\n' +
+      '*users* - vypíše JSON se všemi uživateli - pro debugování');
 });
 
 controller.hears(['progres', 'progress'],'direct_message,direct_mention,mention',function(bot, message) {
   if (actualStatus) {
     bot.reply(message, BOT_ICON + ' ' + actualStatus.printStatusMessage());
+  } else {
+    bot.reply(message, BOT_ICON + ' Žádný status neprobíhá. Můžeš ho spustit tak, že mi napíšeš privátní zprávu "status"');
+  }
+});
+
+controller.hears(['finish'],'direct_message,direct_mention,mention',function(bot, message) {
+  if (actualStatus) {
+    actualStatus.sendStatusMessage(bot, channels, config);
   } else {
     bot.reply(message, BOT_ICON + ' Žádný status neprobíhá. Můžeš ho spustit tak, že mi napíšeš privátní zprávu "status"');
   }
